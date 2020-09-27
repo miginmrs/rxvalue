@@ -1,18 +1,37 @@
-import { combineLatest, of as rxof, Observable, OperatorFunction, ObservedValueOf, UnaryFunction } from 'rxjs';
-import { distinctUntilChanged, map as rxmap } from 'rxjs/operators';
+import { combineLatest, of as rxof, Observable, OperatorFunction, ObservedValueOf, UnaryFunction, Subscriber } from 'rxjs';
+import { distinctUntilChanged as rxdistinct, map as rxmap } from 'rxjs/operators';
 
 export type ValuedSubject<T, V extends T = T> = ValuedObservable<T> & { next: (value: V) => void; };
 export type ValuedObservable<T> = Observable<T> & { readonly value: T; };
+export type ValuedOperatorFunction<T, R> = UnaryFunction<ValuedObservable<T>, ValuedObservable<R>>;
+export type VOperatorFunction<T, R> = OperatorFunction<T, R> & ValuedOperatorFunction<T, R>;
 
 export const of = <T>(value: T) => Object.assign(rxof(value), { value });
 
-export const map = <T, R>(o: ValuedObservable<T>, p: (v: T) => R): ValuedObservable<R> => Object.defineProperty(
-  o.pipe(rxmap(p)), 'value', { get: () => p(o.value) }
-);
+export function map<T, R, V>(project: (this: V, value: T, index: number) => R, thisArg: V): OperatorFunction<T, R>;
+export function map<T, R>(project: (this: Subscriber<T>, value: T, index: number) => R): OperatorFunction<T, R>;
+export function map<T, R, V>(project: (this: Subscriber<T> | V, value: T, index: number) => R, thisArg: V, valued: true): ValuedOperatorFunction<T, R>;
+export function map<T, R>(project: (this: Subscriber<T>, value: T, index: number) => R, thisArg: undefined, valued: true): ValuedOperatorFunction<T, R>;
+export function map<T, R, V>(p: (this: Subscriber<T> | V, value: T, index: number) => R, thisArg?: V, valued?: true): VOperatorFunction<T, R> {
+  const map = rxmap(p, thisArg);
+  return valued ? (source: ValuedObservable<T>) => {
+    const obs = map(source);
+    return Object.defineProperty(obs, 'value', { get: () => p.call(source.value, -1) })
+  } : map;
+}
 
-export const distinct = <T>(o: ValuedObservable<T>, eq?: (a: T, b: T) => boolean): ValuedObservable<T> => Object.defineProperty(
-  o.pipe(distinctUntilChanged(eq)), 'value', { get: () => o.value }
-);
+
+export function distinctUntilChanged<T>(compare?: (a: T, b: T) => boolean): OperatorFunction<T, T>;
+export function distinctUntilChanged<T>(compare: (a: T, b: T) => boolean, keySelector: undefined, valued: true): ValuedOperatorFunction<T, T>;
+export function distinctUntilChanged<T, K>(compare: (x: K, y: K) => boolean, keySelector: (x: T) => K): OperatorFunction<T, T>;
+export function distinctUntilChanged<T, K>(compare: (x: K, y: K) => boolean, keySelector: (x: T) => K, valued: true): ValuedOperatorFunction<T, T>;
+export function distinctUntilChanged<T, K>(compare?: (a: K, b: K) => boolean, keySelector?: (x: T) => K, valued?: true): VOperatorFunction<T, T> {
+  const op = rxdistinct<T, K>(compare, keySelector);
+  return valued ? (source: ValuedObservable<T>) => {
+    const obs = source.pipe(op);
+    return Object.defineProperty(obs, 'value', { get: () => source.value });
+  }: op;
+}
 
 export const combine = <O extends ValuedObservable<any>>(sources: O[]): ValuedObservable<ObservedValueOf<O>[]> => Object.defineProperty(
   combineLatest(sources), 'value', { get: () => sources.map(s => s.value) }
@@ -50,6 +69,4 @@ declare module 'rxjs' {
     pipe<A, B, C, D, E, F, G, H, I>(this: ValuedObservable<T>, op1: ValuedOperatorFunction<T, A>, op2: ValuedOperatorFunction<A, B>, op3: ValuedOperatorFunction<B, C>, op4: ValuedOperatorFunction<C, D>, op5: ValuedOperatorFunction<D, E>, op6: ValuedOperatorFunction<E, F>, op7: ValuedOperatorFunction<F, G>, op8: ValuedOperatorFunction<G, H>, op9: ValuedOperatorFunction<H, I>, ...operations: ValuedOperatorFunction<any, any>[]): ValuedObservable<{}>;
   }
 }
-export interface ValuedOperatorFunction<T, R> extends
-  UnaryFunction<ValuedObservable<T>, ValuedObservable<R>>, OperatorFunction<T, R> { }
 
