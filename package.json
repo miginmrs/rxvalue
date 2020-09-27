@@ -1,11 +1,13 @@
 {
   "name": "rxvalue",
   "version": "1.0.0",
-  "main": "source/index.ts",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "source": "./source",
+  "sideEffects": false,
   "repository": "git@github.com:miginmrs/rxvalue.git",
   "license": "MIT",
   "peerDependencies": {
-    "rxjs": ">=6.0.0",
-    "typescript": ">=4.0.0"
+    "rxjs": ">=6.0.0"
   }
 }

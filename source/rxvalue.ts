@@ -1,5 +1,5 @@
-import { combineLatest, of as rxof, Observable, OperatorFunction, ObservedValueOf, UnaryFunction, Subscriber } from 'rxjs';
-import { distinctUntilChanged as rxdistinct, map as rxmap } from 'rxjs/operators';
+import { combineLatest, of as rxof, Observable, OperatorFunction, ObservedValueOf, UnaryFunction, Subscriber, BehaviorSubject } from 'rxjs';
+import { distinctUntilChanged as rxdistinct, map as rxmap, multicast, refCount } from 'rxjs/operators';
 
 export type ValuedSubject<T, V extends T = T> = ValuedObservable<T> & { next: (value: V) => void; };
 export type ValuedObservable<T> = Observable<T> & { readonly value: T; };
@@ -41,7 +41,12 @@ export const idem = <T>(op: OperatorFunction<T, T>): ValuedOperatorFunction<T, T
   o.pipe(op), 'value', { get: () => o.value }
 );
 
-export const fromPromise = <T>(p: PromiseLike<T>, value: T) => {
+export const startWith = <T>(source: Observable<T>, value: T): ValuedObservable<T> => {
+  const bs = new BehaviorSubject(value);
+  return Object.defineProperty(source.pipe(multicast(bs), refCount()), 'value', { get: () => bs.value })
+}
+
+export const fromPromise = <T>(p: PromiseLike<T>, value: T): ValuedObservable<T> => {
   const observable = new Observable<T>(subs => {
     let done = false;
     subs.next(value);
